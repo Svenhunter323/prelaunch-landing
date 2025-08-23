@@ -41,7 +41,7 @@ const { startFakeWinsJob } = require('./jobs/fakeWins');
   app.use('/api/admin', adminRoutes);
   app.use('/api/telegram', telegramRoutes);
 
-  app.get('/health', (_, res) => res.json({ ok: true }));
+  app.get('/api/health', (_, res) => res.json({ ok: true }));
 
 // ====== STATIC REACT BUILD ======
   const clientDist = path.join(__dirname, '..', 'client', 'dist');

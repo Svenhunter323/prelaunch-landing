@@ -15,10 +15,20 @@ const { startFakeWinsJob } = require('./jobs/fakeWins');
 (async () => {
   await connectDb();
 
+  const corsAllWithCreds = {
+    origin: true,              // reflect the Origin header (allows any origin)
+    credentials: true,         // allow cookies
+    methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
+    allowedHeaders: ['Content-Type','Authorization','X-Requested-With'],
+    maxAge: 86400,
+  };
+
   const app = express();
   app.set('trust proxy', 1);
-  app.use(helmet());
-  app.use(cors({ origin: true, credentials: true }));
+  // app.use(helmet());
+  app.use(cors(corsAllWithCreds));
+  app.options('*', cors(corsAllWithCreds));
+  app.use(helmet({ crossOriginResourcePolicy: false }));
   app.use(express.json());
   app.use(cookieParser());
   app.use(captureContext);

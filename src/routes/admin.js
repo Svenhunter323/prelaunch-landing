@@ -11,19 +11,30 @@ router.post('/login', adminLogin);
 router.get('/users', adminAuth, async (req, res) => {
   const q = {};
   if (req.query.email) q.email = new RegExp(req.query.email, 'i');
+  if (req.query.verified !== undefined) q.emailVerified = req.query.verified === 'true';
   const users = await User.find(q).sort({ createdAt: -1 }).limit(1000);
   res.json(users);
 });
 
 // GET /api/admin/export/codes
 router.get('/export/codes', adminAuth, async (req, res) => {
-  const users = await User.find({}, { email: 1, claimCode: 1, cents: 1, referralCode: 1, referralCount: 1 }).sort({ createdAt: 1 });
+  const users = await User.find({}, { 
+    email: 1, 
+    claimCode: 1, 
+    cents: 1, 
+    referralCode: 1, 
+    referralCount: 1, 
+    emailVerified: 1,
+    createdAt: 1
+  }).sort({ createdAt: 1 });
   const rows = users.map(u => ({
     email: u.email,
     claim_code: u.claimCode,
     credits_usd: (u.cents / 100).toFixed(2),
     referral_code: u.referralCode,
-    referrals: u.referralCount
+    referrals: u.referralCount,
+    email_verified: u.emailVerified ? 'Yes' : 'No',
+    signup_date: u.createdAt?.toISOString().split('T')[0] || ''
   }));
   const csv = toCsv(rows);
   res.setHeader('Content-Type', 'text/csv');

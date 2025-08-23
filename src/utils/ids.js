@@ -13,4 +13,8 @@ function newClaimCode() {
   return `ZOGGY-${claimNano()}`;
 }
 
-module.exports = { newReferralCode, newClaimCode };
+function newEmailVerificationToken() {
+  return customAlphabet('ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz0123456789', 32)();
+}
+
+module.exports = { newReferralCode, newClaimCode, newEmailVerificationToken };

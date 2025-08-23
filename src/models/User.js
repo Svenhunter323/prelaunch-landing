@@ -34,7 +34,12 @@ const userSchema = new mongoose.Schema({
   },
 
   // auth
-  authVersion: { type: Number, default: 1 } // bump to invalidate tokens globally if needed
+  authVersion: { type: Number, default: 1 }, // bump to invalidate tokens globally if needed
+
+  // email verification
+  emailVerified: { type: Boolean, default: false },
+  emailVerificationToken: { type: String, index: true },
+  emailVerificationExpires: { type: Date }
 }, { versionKey: false });
 
 module.exports = mongoose.model('User', userSchema);

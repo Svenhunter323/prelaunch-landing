@@ -4,9 +4,10 @@ const { sign, auth } = require('../middleware/auth');
 const User = require('../models/User');
 const ChestOpen = require('../models/ChestOpen');
 const FakeWin = require('../models/FakeWin');
-const { newReferralCode, newClaimCode } = require('../utils/ids');
+const { newReferralCode, newClaimCode, newEmailVerificationToken } = require('../utils/ids');
 const { drawReward } = require('../services/rewards');
 const { addToList } = require('../services/mailchimp');
+const { sendVerificationEmail } = require('../services/email');
 const cfg = require('../config');
 
 // Anti-fraud helper
@@ -37,6 +38,8 @@ router.post('/waitlist', async (req, res) => {
 
     const referralCode = newReferralCode();
     const claimCode = newClaimCode();
+    const emailVerificationToken = newEmailVerificationToken();
+    const emailVerificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
     let referredBy = (ref || '').trim();
     if (!cfg.antifraud.allowSelfRef && referredBy && referredBy === referralCode) {
@@ -48,6 +51,8 @@ router.post('/waitlist', async (req, res) => {
       referralCode,
       claimCode,
       referredBy,
+      emailVerificationToken,
+      emailVerificationExpires,
       signupIp: req.ctx.ip,
       signupUa: req.ctx.ua,
       deviceId: req.ctx.deviceId
@@ -60,8 +65,82 @@ router.post('/waitlist', async (req, res) => {
 
     addToList(email).catch(() => {});
 
+    // Send verification email
+    try {
+      await sendVerificationEmail(email, emailVerificationToken);
+    } catch (error) {
+      console.error('[waitlist] Failed to send verification email:', error.message);
+      // Continue with signup even if email fails
+    }
+
     const token = sign(user);
-    res.json({ token, referralCode });
+    res.json({ 
+      token, 
+      referralCode, 
+      message: 'Please check your email to verify your account before accessing the dashboard.' 
+    });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'server_error' });
+  }
+});
+
+// GET /api/verify-email
+router.get('/verify-email', async (req, res) => {
+  try {
+    const { token } = req.query;
+    if (!token) return res.status(400).json({ error: 'verification_token_required' });
+
+    const user = await User.findOne({
+      emailVerificationToken: token,
+      emailVerificationExpires: { $gt: new Date() }
+    });
+
+    if (!user) {
+      return res.status(400).json({ error: 'invalid_or_expired_token' });
+    }
+
+    // Mark email as verified
+    user.emailVerified = true;
+    user.emailVerificationToken = undefined;
+    user.emailVerificationExpires = undefined;
+    await user.save();
+
+    res.json({ 
+      success: true, 
+      message: 'Email verified successfully! You can now access your dashboard.' 
+    });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'server_error' });
+  }
+});
+
+// POST /api/resend-verification
+router.post('/resend-verification', auth, async (req, res) => {
+  try {
+    const user = req.user;
+    
+    if (user.emailVerified) {
+      return res.status(400).json({ error: 'email_already_verified' });
+    }
+
+    // Generate new verification token
+    const emailVerificationToken = newEmailVerificationToken();
+    const emailVerificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+    user.emailVerificationToken = emailVerificationToken;
+    user.emailVerificationExpires = emailVerificationExpires;
+    await user.save();
+
+    // Send verification email
+    try {
+      await sendVerificationEmail(user.email, emailVerificationToken);
+      res.json({ message: 'Verification email sent successfully.' });
+    } catch (error) {
+      console.error('[resend-verification] Failed to send email:', error.message);
+      res.status(500).json({ error: 'failed_to_send_email' });
+    }
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'server_error' });
@@ -71,6 +150,14 @@ router.post('/waitlist', async (req, res) => {
 // GET /api/dashboard
 router.get('/dashboard', auth, async (req, res) => {
   const u = req.user;
+
+  // Check if email is verified
+  if (!u.emailVerified) {
+    return res.status(403).json({ 
+      error: 'email_not_verified',
+      message: 'Please verify your email address before accessing the dashboard.'
+    });
+  }
 
   // position: rank by (referralCount desc, createdAt asc)
   const ahead = await User.countDocuments({
@@ -92,6 +179,7 @@ router.get('/dashboard', auth, async (req, res) => {
     cents: u.cents,
     balance: (u.cents / 100).toFixed(2),
     telegram: { linked: !!u.telegramUserId, verified: !!u.telegramJoinedOk },
+    emailVerified: u.emailVerified,
     lastOpenAt: u.lastOpenAt,
     openCount: u.openCount,
     cooldownSeconds: u.lastOpenAt ? Math.max(0, Math.floor(24 * 3600 - (Date.now() - u.lastOpenAt.getTime()) / 1000)) : 0
@@ -101,6 +189,14 @@ router.get('/dashboard', auth, async (req, res) => {
 // POST /api/open-chest
 router.post('/open-chest', auth, async (req, res) => {
   const u = req.user;
+
+  // Check if email is verified
+  if (!u.emailVerified) {
+    return res.status(403).json({ 
+      error: 'email_not_verified',
+      message: 'Please verify your email address before opening chests.'
+    });
+  }
 
   // Telegram gate
   if (!u.telegramJoinedOk) {

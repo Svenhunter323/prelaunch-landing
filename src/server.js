@@ -1,4 +1,5 @@
 const express = require('express');
+const path = require('path');
 const cors = require('cors');
 const helmet = require('helmet');
 const cookieParser = require('cookie-parser');
@@ -41,6 +42,16 @@ const { startFakeWinsJob } = require('./jobs/fakeWins');
   app.use('/api/telegram', telegramRoutes);
 
   app.get('/health', (_, res) => res.json({ ok: true }));
+
+// ====== STATIC REACT BUILD ======
+  const clientDist = path.join(__dirname, '..', 'client', 'dist');
+  app.use(express.static(clientDist));
+
+  // SPA fallback (only if no /api match)
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(clientDist, 'index.html'));
+  });
+// ====== END STATIC REACT BUILD ======
 
   const server = app.listen(cfg.port, () => {
     console.log(`[api] listening on :${cfg.port}`);

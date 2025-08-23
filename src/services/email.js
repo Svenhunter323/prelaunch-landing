@@ -27,7 +27,7 @@ async function sendVerificationEmail(email, token) {
     return;
   }
 
-  const verifyUrl = `${process.env.PUBLIC_BASE_URL || 'http://localhost:3000'}/api/verify-email?token=${token}`;
+  const verifyUrl = `${process.env.PUBLIC_BASE_URL || 'http://localhost:3000'}/verify-email?token=${token}`;
   
   const mailOptions = {
     from: cfg.email.from,

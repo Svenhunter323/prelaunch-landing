@@ -1,5 +1,15 @@
 require('dotenv').config();
 
+// Validate required environment variables
+const requiredEnvVars = ['MONGODB_URI', 'JWT_SECRET'];
+const missingEnvVars = requiredEnvVars.filter(envVar => !process.env[envVar]);
+
+if (missingEnvVars.length > 0) {
+  console.error(`Missing required environment variables: ${missingEnvVars.join(', ')}`);
+  console.error('Please create a .env file based on .env.example');
+  process.exit(1);
+}
+
 const cfg = {
   env: process.env.NODE_ENV || 'development',
   port: Number(process.env.PORT || 8080),

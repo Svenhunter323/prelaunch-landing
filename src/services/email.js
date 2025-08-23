@@ -4,8 +4,9 @@ const cfg = require('../config');
 let transporter = null;
 
 function getTransporter() {
+  // console.log('config [email]', cfg.email);
   if (!transporter && cfg.email.user && cfg.email.password) {
-    transporter = nodemailer.createTransporter({
+    transporter = nodemailer.createTransport({
       host: cfg.email.host,
       port: cfg.email.port,
       secure: cfg.email.secure,
@@ -20,6 +21,7 @@ function getTransporter() {
 
 async function sendVerificationEmail(email, token) {
   const transport = getTransporter();
+  // console.log('[email] Transporter:', transport);
   if (!transport) {
     console.warn('[email] No email configuration found, skipping verification email');
     return;

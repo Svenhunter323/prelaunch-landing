@@ -1,0 +1,7 @@
+{
+    "rewrites": [
+      { "source": "/verify-email", "destination": "https://prelaunch-landing.onrender.com/verify-email" },
+      { "source": "/api/:path*", "destination": "https://prelaunch-landing.onrender.com/api/:path*" }
+    ]
+  }
+  

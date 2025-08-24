@@ -63,7 +63,9 @@ router.post('/waitlist', async (req, res) => {
       await User.updateOne({ referralCode: referredBy }, { $inc: { referralCount: 1 } });
     }
 
-    addToList(email).catch(() => {});
+    addToList(email).catch((e) => {
+      console.error('[waitlist] Failed to add to Mailchimp:', e.message);
+    });
 
     // Send verification email
     try {

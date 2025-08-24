@@ -1,0 +1,619 @@
+openapi: 3.0.3
+info:
+  title: Zoggy Pre-Launch API
+  description: Production-ready backend API for Zoggy Pre-Launch platform with waitlist, daily chest opening, referral system, and leaderboard.
+  version: 1.0.0
+  contact:
+    name: Zoggy Support
+    email: help@zoggybet.com
+  license:
+    name: MIT
+
+servers:
+  - url: https://api.zoggybet.com
+    description: Production server
+  - url: http://localhost:8080
+    description: Development server
+
+paths:
+  /healthz:
+    get:
+      summary: Health check
+      tags: [System]
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  timestamp:
+                    type: string
+                    format: date-time
+
+  /waitlist:
+    post:
+      summary: Join waitlist
+      tags: [Waitlist]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: user@example.com
+                ref:
+                  type: string
+                  description: Referral code
+                  example: ABC123XY
+      responses:
+        '201':
+          description: Successfully joined waitlist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WaitlistResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+
+  /auth/verify-email:
+    post:
+      summary: Verify email address
+      tags: [Authentication]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+                  description: Email verification token
+      responses:
+        '200':
+          description: Email verified successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /auth/admin/login:
+    post:
+      summary: Admin login
+      tags: [Authentication]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      token:
+                        type: string
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /auth/me:
+    get:
+      summary: Get user profile
+      tags: [Authentication]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: User profile
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/UserProfile'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /chest/open:
+    post:
+      summary: Open daily chest
+      tags: [Chest]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Chest opened successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/ChestOpenResult'
+        '403':
+          description: Requirements not met (email/telegram verification)
+        '429':
+          description: Cooldown active
+
+  /telegram/deeplink:
+    get:
+      summary: Get Telegram verification deeplink
+      tags: [Telegram]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Deeplink generated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      url:
+                        type: string
+                        format: uri
+
+  /telegram/webhook:
+    post:
+      summary: Telegram webhook endpoint
+      tags: [Telegram]
+      parameters:
+        - name: secret
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Telegram update object
+      responses:
+        '200':
+          description: Webhook processed
+        '401':
+          description: Invalid webhook secret
+
+  /telegram/verify-status:
+    get:
+      summary: Get Telegram verification status
+      tags: [Telegram]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Verification status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      telegramVerified:
+                        type: boolean
+
+  /leaderboard/top10:
+    get:
+      summary: Get top 10 leaderboard
+      tags: [Leaderboard]
+      responses:
+        '200':
+          description: Top 10 leaderboard entries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/LeaderboardEntry'
+
+  /wins/latest:
+    get:
+      summary: Get latest fake wins feed
+      tags: [Wins]
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 24
+      responses:
+        '200':
+          description: Latest wins
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/LatestWin'
+
+  /admin/users:
+    get:
+      summary: List users (Admin)
+      tags: [Admin]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: cursor
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: q
+          in: query
+          description: Search query (email or referral code)
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Users list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/PaginatedUsers'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+
+  /admin/referrals:
+    get:
+      summary: List referrals (Admin)
+      tags: [Admin]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: cursor
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, eligible, invalid]
+      responses:
+        '200':
+          description: Referrals list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/PaginatedReferrals'
+
+  /admin/exports/claim-codes.csv:
+    get:
+      summary: Export claim codes as CSV (Admin)
+      tags: [Admin]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: CSV file
+          content:
+            text/csv:
+              schema:
+                type: string
+
+  /admin/flag-user:
+    post:
+      summary: Flag user for fraud (Admin)
+      tags: [Admin]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId, reason]
+              properties:
+                userId:
+                  type: string
+                reason:
+                  type: string
+      responses:
+        '200':
+          description: User flagged successfully
+        '404':
+          description: User not found
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    WaitlistResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            token:
+              type: string
+            referralCode:
+              type: string
+            claimCode:
+              type: string
+        message:
+          type: string
+
+    UserProfile:
+      type: object
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+          format: email
+        referralCode:
+          type: string
+        claimCode:
+          type: string
+        totalCredits:
+          type: number
+        telegramVerified:
+          type: boolean
+        emailVerified:
+          type: boolean
+        nextChestAt:
+          type: string
+          format: date-time
+          nullable: true
+        countdownSeconds:
+          type: integer
+
+    ChestOpenResult:
+      type: object
+      properties:
+        amount:
+          type: number
+        totalCredits:
+          type: number
+        nextChestAt:
+          type: string
+          format: date-time
+
+    LeaderboardEntry:
+      type: object
+      properties:
+        rank:
+          type: integer
+        maskedName:
+          type: string
+        maskedEmail:
+          type: string
+        validReferrals:
+          type: integer
+        prize:
+          type: number
+
+    LatestWin:
+      type: object
+      properties:
+        username:
+          type: string
+        country:
+          type: string
+        amount:
+          type: number
+        createdAt:
+          type: string
+          format: date-time
+
+    PaginatedUsers:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              email:
+                type: string
+              referralCode:
+                type: string
+              claimCode:
+                type: string
+              totalCredits:
+                type: number
+              emailVerified:
+                type: boolean
+              telegramVerified:
+                type: boolean
+              createdAt:
+                type: string
+                format: date-time
+        hasMore:
+          type: boolean
+        nextCursor:
+          type: string
+
+    PaginatedReferrals:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              referrerId:
+                type: object
+              referredUserId:
+                type: object
+              status:
+                type: string
+                enum: [pending, eligible, invalid]
+              reason:
+                type: string
+              createdAt:
+                type: string
+                format: date-time
+        hasMore:
+          type: boolean
+        nextCursor:
+          type: string
+
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              message:
+                type: string
+
+  responses:
+    ValidationError:
+      description: Validation error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    UnauthorizedError:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    ForbiddenError:
+      description: Insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    ConflictError:
+      description: Resource conflict
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    RateLimitError:
+      description: Rate limit exceeded
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+tags:
+  - name: System
+    description: System health and status
+  - name: Waitlist
+    description: Waitlist management
+  - name: Authentication
+    description: User authentication and profile
+  - name: Chest
+    description: Daily chest opening
+  - name: Telegram
+    description: Telegram integration
+  - name: Leaderboard
+    description: Referral leaderboard
+  - name: Wins
+    description: Latest wins feed
+  - name: Admin
+    description: Admin operations
